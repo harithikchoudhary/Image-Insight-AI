@@ -1,37 +1,56 @@
 import React, { useState } from "react";
-import { Upload, FileImage, SendHorizontal, Loader2 } from "lucide-react";
+import {
+  Upload,
+  FileImage,
+  SendHorizontal,
+  Loader2,
+  CheckCircle,
+} from "lucide-react";
 
 const ImageInsightApp = () => {
   const [file, setFile] = useState(null);
-  const [extractedText, setExtractedText] = useState("");
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [isProcessingQuestion, setIsProcessingQuestion] = useState(false);
   const [currentOutputDir, setCurrentOutputDir] = useState(null);
+  const [isExtracted, setIsExtracted] = useState(false);
 
-  const handleFileUpload = async (event) => {
+  const handleFileSelect = (event) => {
     const selectedFile = event.target.files[0];
     setFile(selectedFile);
+    setIsExtracted(false);
+  };
 
-    if (selectedFile) {
-      const formData = new FormData();
-      formData.append("file", selectedFile);
+  const handleFileUpload = async () => {
+    if (!file) {
+      alert("Please select a file first");
+      return;
+    }
 
-      setIsUploading(true);
-      setExtractedText("");
+    const formData = new FormData();
+    formData.append("file", file);
 
-      try {
-        // Simulated upload process
-        // Replace with actual upload logic
-        const response = await simulateUpload(formData);
-        setExtractedText(response.extracted_text);
-        setCurrentOutputDir(response.output_dir);
-        setIsUploading(false);
-      } catch (error) {
-        console.error("Upload failed", error);
-        setIsUploading(false);
+    setIsUploading(true);
+
+    try {
+      const response = await fetch("http://localhost:5000/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Upload failed");
       }
+
+      const data = await response.json();
+      setCurrentOutputDir(data.output_dir);
+      setIsUploading(false);
+      setIsExtracted(true);
+    } catch (error) {
+      console.error("Upload failed", error);
+      setIsUploading(false);
+      alert("Failed to upload image. Please try again.");
     }
   };
 
@@ -47,61 +66,55 @@ const ImageInsightApp = () => {
     setAnswer("");
 
     try {
-      // Simulated question processing
-      // Replace with actual question processing logic
-      const response = await simulateQuestionProcess(
-        question,
-        currentOutputDir
-      );
-      setAnswer(response.answer);
+      const response = await fetch("http://localhost:5000/ask", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          question: question,
+          output_dir: currentOutputDir,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to process question");
+      }
+
+      const data = await response.json();
+      setAnswer(data.answer);
       setIsProcessingQuestion(false);
     } catch (error) {
       console.error("Question processing failed", error);
       setIsProcessingQuestion(false);
+      alert("Failed to process question. Please try again.");
     }
   };
 
-  // Simulated backend functions (replace with actual API calls)
-  const simulateUpload = (formData) => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          extracted_text: "Sample extracted text from the uploaded image...",
-          output_dir: "sample_output_directory",
-        });
-      }, 1500);
-    });
-  };
-
-  const simulateQuestionProcess = (question, outputDir) => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          answer: `Answer to "${question}" based on the image content...`,
-        });
-      }, 1500);
-    });
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-teal-50 to-teal-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 space-y-6 transform transition-all hover:scale-105 duration-300">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-2xl bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] p-8 space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-teal-700 mb-2">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent mb-3">
             Image Insight
           </h1>
-          <p className="text-gray-600">Extract Text & Get Answers</p>
+          <p className="text-gray-600 text-lg">
+            Ask Questions About Your Image
+          </p>
         </div>
 
-        <div className="bg-teal-50 rounded-xl p-4 border border-teal-200">
-          <h2 className="text-teal-700 font-semibold mb-4 flex items-center">
-            <Upload className="mr-2" /> Upload Image
+        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6 border border-indigo-100 shadow-sm">
+          <h2 className="text-xl font-semibold text-indigo-700 mb-6 flex items-center">
+            <Upload className="mr-3" size={24} />
+            Upload Image
           </h2>
 
           <div
-            className={`border-2 border-dashed border-teal-600 rounded-xl p-6 text-center cursor-pointer 
-              hover:bg-teal-100 transition-colors group ${
-                file ? "border-green-500" : ""
+            className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all duration-300
+              ${
+                file
+                  ? "border-green-500 bg-green-50"
+                  : "border-indigo-300 hover:border-indigo-400"
               }`}
             onClick={() => document.getElementById("fileInput").click()}
           >
@@ -110,70 +123,93 @@ const ImageInsightApp = () => {
               id="fileInput"
               accept="image/*"
               className="hidden"
-              onChange={handleFileUpload}
+              onChange={handleFileSelect}
             />
             <FileImage
-              className="mx-auto mb-4 text-teal-600 group-hover:text-teal-700"
-              size={48}
+              className={`mx-auto mb-4 ${
+                file ? "text-green-500" : "text-indigo-500"
+              }`}
+              size={56}
             />
-            <p className="text-gray-600">
+            <p
+              className={`text-lg ${file ? "text-green-700" : "text-gray-600"}`}
+            >
               {file
                 ? `Selected: ${file.name}`
                 : "Drag & drop or click to select image"}
             </p>
           </div>
 
+          <button
+            onClick={handleFileUpload}
+            disabled={!file || isUploading || isExtracted}
+            className={`w-full mt-6 py-4 rounded-xl flex items-center justify-center text-lg font-medium transition-all duration-300
+              ${
+                !file || isUploading || isExtracted
+                  ? "bg-gray-300 cursor-not-allowed"
+                  : "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/25"
+              } text-white`}
+          >
+            <Upload className="mr-3" size={24} />
+            {isUploading ? "Processing..." : "Upload and Extract Text"}
+          </button>
+
           {isUploading && (
-            <div className="flex items-center justify-center mt-4 text-teal-700">
-              <Loader2 className="mr-2 animate-spin" />
-              Processing image...
+            <div className="flex items-center justify-center mt-6 text-indigo-700">
+              <Loader2 className="mr-3 animate-spin" size={24} />
+              <span className="text-lg">Processing image...</span>
             </div>
           )}
 
-          {extractedText && (
-            <div className="mt-4 p-3 bg-white border border-teal-100 rounded-xl max-h-40 overflow-y-auto">
-              <h3 className="font-semibold text-teal-700 mb-2">
-                Extracted Text
-              </h3>
-              <p className="text-gray-700">{extractedText}</p>
+          {isExtracted && (
+            <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center justify-center text-green-700 shadow-sm">
+              <CheckCircle className="mr-3" size={24} />
+              <span className="text-lg font-medium">
+                Text extracted successfully!
+              </span>
             </div>
           )}
         </div>
 
-        {extractedText && (
-          <div className="bg-teal-50 rounded-xl p-4 border border-teal-200">
-            <h2 className="text-teal-700 font-semibold mb-4 flex items-center">
-              <SendHorizontal className="mr-2" /> Ask a Question
+        {isExtracted && (
+          <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6 border border-indigo-100 shadow-sm">
+            <h2 className="text-xl font-semibold text-indigo-700 mb-6 flex items-center">
+              <SendHorizontal className="mr-3" size={24} />
+              Ask a Question
             </h2>
 
-            <form onSubmit={handleQuestionSubmit} className="flex space-x-2">
+            <form onSubmit={handleQuestionSubmit} className="flex space-x-4">
               <input
                 type="text"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 placeholder="What would you like to know?"
-                className="flex-grow p-3 border border-teal-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-600"
+                className="flex-grow p-4 border border-indigo-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-lg shadow-sm"
                 required
               />
               <button
                 type="submit"
-                className="bg-teal-700 text-white p-3 rounded-xl hover:bg-teal-800 transition-colors flex items-center"
+                className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-4 rounded-xl flex items-center shadow-lg shadow-indigo-500/25 hover:from-indigo-700 hover:to-purple-700 transition-all duration-300"
               >
-                <SendHorizontal />
+                <SendHorizontal size={24} />
               </button>
             </form>
 
             {isProcessingQuestion && (
-              <div className="flex items-center justify-center mt-4 text-teal-700">
-                <Loader2 className="mr-2 animate-spin" />
-                Generating answer...
+              <div className="flex items-center justify-center mt-6 text-indigo-700">
+                <Loader2 className="mr-3 animate-spin" size={24} />
+                <span className="text-lg">Generating answer...</span>
               </div>
             )}
 
             {answer && (
-              <div className="mt-4 p-3 bg-white border border-teal-100 rounded-xl max-h-40 overflow-y-auto">
-                <h3 className="font-semibold text-teal-700 mb-2">Answer</h3>
-                <p className="text-gray-700">{answer}</p>
+              <div className="mt-6 p-6 bg-white border border-indigo-100 rounded-xl shadow-sm">
+                <h3 className="text-xl font-semibold text-indigo-700 mb-3">
+                  Answer
+                </h3>
+                <p className="text-gray-700 text-lg leading-relaxed">
+                  {answer}
+                </p>
               </div>
             )}
           </div>

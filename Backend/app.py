@@ -3,12 +3,19 @@ import uuid
 import json
 from flask import Flask, request, render_template, jsonify
 from werkzeug.utils import secure_filename
+from flask_cors import CORS
 import imagetotext
 import ask_questions
+import logging
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['OUTPUT_FOLDER'] = 'output_results'
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Ensure required directories exist
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -63,21 +70,25 @@ def upload_file():
             # Clean up zip file
             os.remove(f"{output_dir}.zip")
             
-            # Get the extracted text
+            # Get the extracted text and log it
             response_file = [f for f in os.listdir(output_dir) if f.endswith('.response')][0]
             extracted_text = ask_questions.read_extracted_content(os.path.join(output_dir, response_file))
+            
+            # Log the extracted text
+            logger.info(f"Extracted text from image '{filename}':\n{extracted_text}")
             
             return jsonify({
                 'success': True,
                 'message': 'File processed successfully',
-                'extracted_text': extracted_text,
                 'output_dir': output_dir
             })
 
         except Exception as e:
+            logger.error(f"Error processing image: {str(e)}")
             return jsonify({'error': str(e)}), 500
             
     except Exception as e:
+        logger.error(f"Error in upload endpoint: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/ask', methods=['POST'])
@@ -98,13 +109,20 @@ def ask():
         response_file = os.path.join(output_dir, response_files[0])
         content = ask_questions.read_extracted_content(response_file)
         
+        # Log the question and content being processed
+        logger.info(f"Processing question: {question}")
+        logger.info(f"Content being processed:\n{content}")
+        
         answer = ask_questions.ask_question(content, question)
         if answer:
+            logger.info(f"Generated answer: {answer}")
             return jsonify({'answer': answer})
         else:
+            logger.error("Failed to generate answer")
             return jsonify({'error': 'Failed to get answer'}), 500
 
     except Exception as e:
+        logger.error(f"Error in ask endpoint: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
