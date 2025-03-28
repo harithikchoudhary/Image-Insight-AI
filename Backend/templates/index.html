@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Image Insight</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+      :root {
+        --primary-color: #3b82f6;
+        --secondary-color: #f3f4f6;
+        --text-color: #333;
+        --border-color: #e0e0e0;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Arial", sans-serif;
+        background: linear-gradient(135deg, #e6f2ff 0%, #b3d9ff 100%);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        line-height: 1.6;
+        color: var(--text-color);
+      }
+
+      .container {
+        background-color: white;
+        border-radius: 16px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        width: 100%;
+        max-width: 500px;
+        padding: 30px;
+        transition: transform 0.3s ease;
+      }
+
+      .container:hover {
+        transform: scale(1.02);
+      }
+
+      .header {
+        text-align: center;
+        margin-bottom: 30px;
+      }
+
+      .header h1 {
+        color: var(--primary-color);
+        font-size: 24px;
+        margin-bottom: 10px;
+      }
+
+      .header p {
+        color: #6b7280;
+      }
+
+      .upload-section,
+      .qa-section {
+        background-color: var(--secondary-color);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+
+      .upload-section h2,
+      .qa-section h2 {
+        color: var(--primary-color);
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      #file-upload {
+        border: 2px dashed var(--primary-color);
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+
+      #file-upload:hover {
+        background-color: rgba(59, 130, 246, 0.05);
+      }
+
+      #file {
+        display: none;
+      }
+
+      .btn {
+        width: 100%;
+        padding: 12px;
+        background-color: var(--primary-color);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: background-color 0.3s ease, transform 0.2s ease;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .btn:hover {
+        background-color: #2563eb;
+        transform: scale(1.05);
+      }
+
+      #uploadStatus,
+      #questionStatus {
+        text-align: center;
+        color: #6b7280;
+        font-style: italic;
+        margin-top: 15px;
+        display: none;
+      }
+
+      #extractedText,
+      #answer {
+        background-color: white;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 15px;
+        margin-top: 15px;
+        max-height: 200px;
+        overflow-y: auto;
+        display: none;
+      }
+
+      #questionForm {
+        display: flex;
+        gap: 10px;
+      }
+
+      #question {
+        flex-grow: 1;
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        outline: none;
+        transition: border-color 0.3s ease;
+      }
+
+      #question:focus {
+        border-color: var(--primary-color);
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.05);
+        }
+      }
+
+      .pulse-hover:hover {
+        animation: pulse 1s infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .loading-icon {
+        display: inline-block;
+        animation: spin 1s linear infinite;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Image Insight</h1>
+        <p>Extract Text & Get Answers</p>
+      </div>
+
+      <div class="upload-section">
+        <h2>Upload Image</h2>
+        <form id="uploadForm">
+          <div id="file-upload">
+            <input type="file" id="file" accept="image/*" required />
+            <label for="file"> Drag & drop or click to select image </label>
+          </div>
+          <button type="submit" class="btn pulse-hover">Extract Text</button>
+        </form>
+        <div id="uploadStatus">
+          <span class="loading-icon">⭯</span> Processing image...
+        </div>
+        <div id="extractedText"></div>
+      </div>
+
+      <div id="qaSection" style="display: none">
+        <div class="qa-section">
+          <h2>Ask a Question</h2>
+          <form id="questionForm">
+            <input
+              type="text"
+              id="question"
+              placeholder="What would you like to know?"
+              required
+            />
+            <button type="submit" class="btn pulse-hover">Ask</button>
+          </form>
+          <div id="questionStatus">
+            <span class="loading-icon">⭯</span> Generating answer...
+          </div>
+          <div id="answer"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentOutputDir = null;
+
+      $("#uploadForm").on("submit", function (e) {
+        e.preventDefault();
+
+        const formData = new FormData();
+        const fileInput = $("#file")[0];
+
+        if (fileInput.files.length === 0) {
+          alert("Please select a file first");
+          return;
+        }
+
+        formData.append("file", fileInput.files[0]);
+
+        $("#uploadStatus").show();
+        $("#extractedText").hide();
+        $("#qaSection").hide();
+
+        $.ajax({
+          url: "/upload",
+          type: "POST",
+          data: formData,
+          processData: false,
+          contentType: false,
+          success: function (response) {
+            $("#uploadStatus").hide();
+            $("#extractedText").show().text(response.extracted_text);
+            $("#qaSection").show();
+            currentOutputDir = response.output_dir;
+          },
+          error: function (xhr) {
+            $("#uploadStatus").hide();
+            alert(
+              "Error: " + (xhr.responseJSON?.error || "Failed to process image")
+            );
+          },
+        });
+      });
+
+      $("#questionForm").on("submit", function (e) {
+        e.preventDefault();
+
+        if (!currentOutputDir) {
+          alert("Please upload an image first");
+          return;
+        }
+
+        const question = $("#question").val().trim();
+        if (!question) {
+          alert("Please enter a question");
+          return;
+        }
+
+        $("#questionStatus").show();
+        $("#answer").hide();
+
+        $.ajax({
+          url: "/ask",
+          type: "POST",
+          contentType: "application/json",
+          data: JSON.stringify({
+            question: question,
+            output_dir: currentOutputDir,
+          }),
+          success: function (response) {
+            $("#questionStatus").hide();
+            $("#answer").show().text(response.answer);
+          },
+          error: function (xhr) {
+            $("#questionStatus").hide();
+            alert(
+              "Error: " + (xhr.responseJSON?.error || "Failed to get answer")
+            );
+          },
+        });
+      });
+
+      // File upload label interaction
+      $("#file-upload").on("click", function () {
+        $("#file").click();
+      });
+
+      $("#file").on("change", function () {
+        if (this.files && this.files.length > 0) {
+          $("#file-upload label").text(this.files[0].name);
+        }
+      });
+    </script>
+  </body>
+</html>
